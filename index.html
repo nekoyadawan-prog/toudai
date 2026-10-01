@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ザ東大問題 - AIリアル連携版</title>
+    <style>
+        :root {
+            --primary: #2b5288;
+            --primary-dark: #1e3a61;
+            --accent: #e76f51;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #2b2d42;
+            --text-light: #6c757d;
+            --success: #2a9d8f;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            padding: 30px;
+            position: relative;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            color: var(--primary);
+        }
+
+        .api-key-config {
+            background: #fff3bf;
+            border: 1px solid #ffe066;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .api-key-config input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .subject-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .subject-btn {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--primary);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .subject-btn:hover {
+            border-color: var(--primary);
+            background: #f0f4f9;
+        }
+
+        .problem-card {
+            background: #f8fafc;
+            border-left: 5px solid var(--primary);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .problem-level {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: white;
+            background: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .problem-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .problem-text {
+            font-size: 1.05rem;
+            white-space: pre-line;
+            line-height: 1.7;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--primary);
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 12px;
+            border: 2px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 1rem;
+            resize: vertical;
+        }
+
+        .ai-response {
+            background: #eef2ff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #c7d2fe;
+        }
+
+        .ai-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .ai-avatar {
+            width: 30px;
+            height: 30px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+
+        .btn-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            flex: 1;
+            min-width: 160px;
+            padding: 14px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-downgrade { background: #fff3bf; color: #8f6b00; border: 1px solid #ffe066; }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 15px;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .capsule-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .capsule-card {
+            padding: 15px;
+            border-radius: 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+        .victory-banner {
+            text-align: center;
+            padding: 20px;
+            background: #ecfdf5;
+            border: 2px dashed var(--success);
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>🏛️ ザ東大問題 (Gemini API連携版)</h1>
+        <p style="font-size:0.85rem; color:#666;">リアルタイムAI診断で思考プロセスを厳密分析</p>
+    </header>
+
+    <!-- APIキー設定エリア -->
+    <div class="api-key-config">
+        <label for="api-key-input">🔑 Gemini API Key を入力してください:</label>
+        <input type="password" id="api-key-input" placeholder="AI Studioで取得したAPIキーをペースト">
+    </div>
+
+    <!-- STEP 1: 科目選択 -->
+    <div id="screen-subject" class="screen active">
+        <h2 style="text-align: center; margin-bottom: 10px;">挑戦する科目を選んでください</h2>
+        <div class="subject-grid">
+            <button class="subject-btn" onclick="selectSubject('数学')">📐 数学</button>
+            <button class="subject-btn" onclick="selectSubject('現代文')">📖 現代文</button>
+            <button class="subject-btn" onclick="selectSubject('英語')">🔤 英語</button>
+        </div>
+    </div>
+
+    <!-- STEP 2: 東大問題（絶望）＆愚痴入力 -->
+    <div id="screen-todai" class="screen">
+        <div class="problem-card">
+            <span class="problem-level">東京大学 入試問題</span>
+            <div class="problem-title" id="todai-title">問題タイトル</div>
+            <div class="problem-text" id="todai-text">問題文</div>
+        </div>
+
+        <div class="input-group">
+            <label for="initial-thought">💬 思考・言い訳・愚痴など、何でも自由に書いてください：</label>
+            <textarea id="initial-thought" placeholder="例：「1文字目から意味不明」「日本語で書いて」「解けるわけない」など…"></textarea>
+        </div>
+
+        <button class="btn btn-primary" style="width: 100%;" onclick="startAiDiagnosis()">AIに思考を分析してもらう</button>
+    </div>
+
+    <!-- STEP 3: AIとのインタラクティブ学習ステップ -->
+    <div id="screen-step" class="screen">
+        <div class="ai-response">
+            <div class="ai-header">
+                <div class="ai-avatar">AI</div>
+                <span>Geminiの分析＆フィードバック</span>
+            </div>
+            <div class="ai-text" id="ai-feedback">思考中...</div>
+        </div>
+
+        <div class="problem-card">
+            <span class="problem-level" id="step-level-tag">ステップ問題</span>
+            <div class="problem-title" id="step-title">問題タイトル</div>
+            <div class="problem-text" id="step-text">問題文</div>
+        </div>
+
+        <div class="input-group">
+            <label for="step-answer">✍️ あなたの回答・思考：</label>
+            <textarea id="step-answer" placeholder="答えや、考えたプロセスを書いてください。"></textarea>
+        </div>
+
+        <div class="loading-spinner" id="loading">🤖 AIが回答を分析中...</div>
+
+        <div class="btn-container" id="action-buttons">
+            <button class="btn btn-downgrade" onclick="requestLowerLevel()">😭 これでも難しい…（もっと下げる）</button>
+            <button class="btn btn-primary" onclick="submitStepAnswer()">AIに判定してもらう ➔</button>
+        </div>
+    </div>
+
+    <!-- STEP 4: 勝利画面 -->
+    <div id="screen-victory" class="screen">
+        <div class="victory-banner">
+            <h2>🎉 祝！東大問題を完全攻略！</h2>
+            <p>絶望からの大逆転！あなたの見事な成長の記録です。</p>
+        </div>
+
+        <h3>📜 成長の軌跡（タイムカプセル）</h3>
+        <div class="capsule-box">
+            <div class="capsule-card">
+                <strong>最初の本音（絶望）:</strong>
+                <p id="capsule-before" style="margin-top:5px; font-style:italic;"></p>
+            </div>
+            <div class="capsule-card">
+                <strong>最終的な解答:</strong>
+                <p id="capsule-after" style="margin-top:5px; font-style:italic;"></p>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" style="width: 100%; margin-top: 15px;" onclick="location.reload()">別の問題で遊ぶ</button>
+    </div>
+</div>
+
+<script>
+    const todaiProblems = {
+        '数学': {
+            title: "定積分の計算と極限（東大数学）",
+            text: "n を自然数とするとき、I_n = ∫[0 to 1] (1 - x^2)^n dx を求めよ。"
+        },
+        '現代文': {
+            title: "抽象的論文の読解（東大現代文）",
+            text: "「言語的記号が持つ自己言及的限界性と、他者理解における間主体性の相克について説明せよ。」"
+        },
+        '英語': {
+            title: "構造把握（東大英語）",
+            text: "Translate into Japanese:\n\"The extent to which technological advances alter human perception depends largely on our willingness to critically assess our implicit biases.\""
+        }
+    };
+
+    let selectedSubject = '';
+    let initialUserThought = '';
+    let currentProblemState = {
+        level: '小学生基礎',
+        title: '',
+        text: ''
+    };
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function selectSubject(subject) {
+        selectedSubject = subject;
+        const prob = todaiProblems[subject];
+        document.getElementById('todai-title').textContent = prob.title;
+        document.getElementById('todai-text').textContent = prob.text;
+        showScreen('screen-todai');
+    }
+
+    async function callGemini(promptText) {
+        const apiKey = document.getElementById('api-key-input').value.trim();
+        if (!apiKey) {
+            alert('Gemini API Key を入力してください！');
+            return null;
+        }
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        
+        const systemInstruction = "必ず以下のJSONフォーマットのテキストのみを出力してください。余計な文章や```jsonなどの装飾タグは一切含めないでください。\n" +
+            '{"feedback": "文字列", "isCorrectOrPass": false, "nextLevelName": "文字列", "nextProblemTitle": "文字列", "nextProblemText": "文字列", "isFinalStepCleared": false}';
+
+        const payload = {
+            contents: [{
+                parts: [{ text: promptText + "\n\n" + systemInstruction }]
+            }]
+        };
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error ? data.error.message : `HTTP エラー: ${res.status}`);
+            }
+
+            if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
+                let rawText = data.candidates[0].content.parts[0].text.trim();
+                rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+                return JSON.parse(rawText);
+            } else {
+                throw new Error("APIからの応答が不正な形式です");
+            }
+        } catch (e) {
+            alert("API通信エラーが発生しました:\n" + e.message);
+            return null;
+        }
+    }
+
+    async function startAiDiagnosis() {
+        initialUserThought = document.getElementById('initial-thought').value.trim();
+        if (!initialUserThought) {
+            alert("愚痴や言い訳、率直な感想を一言入力してください！");
+            return;
+        }
+
+        document.getElementById('action-buttons').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+        showScreen('screen-step');
+
+        const prompt = `あなたは学習ゲーム「ザ東大問題」のAI伴走者です。
+科目: ${selectedSubject}
+元の東大問題: ${todaiProblems[selectedSubject].text}
+ユーザーの最初の本音・愚痴: "${initialUserThought}"
+
+【タスク】
+ユーザーの本音を寄り添って肯定しつつ、ユーザーの理解度・拒絶レベルを判定してください。
+そして、絶対に解ける「小学生レベル（超基礎）」の問題を一つ作成してください。`;
+
+        const res = await callGemini(prompt);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('action-buttons').style.display = 'flex';
+
+        if (res) {
+            updateStepView(res);
+        }
+    }
+
+    async function submitStepAnswer() {
+        const userAnswer = document.getElementById('step-answer').value.trim();
+        if (!userAnswer) {
+            alert("回答または考えたことを入力してください！");
+            return;
+        }
+
+        document.getElementById('action-buttons').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
+        const prompt = `あなたは学習ゲーム「ザ東大問題」の厳格かつ優しいAI講師です。
+科目: ${selectedSubject}
+元の東大問題: ${todaiProblems[selectedSubject].text}
+現在の出題レベル: ${currentProblemState.level}
+現在の問題: ${currentProblemState.text}
+ユーザーの解答: "${userAnswer}"
+
+【重要判定ルール】
+- 適当な一文字（例：「あ」「わからん」「パス」など）や、思考の痕跡が一切ない適当な回答の場合は「isCorrectOrPass: false」にしてください。
+- 適当な回答に対しては、甘く流さずに「どこが分かっていて、何が足りないか」を厳密に指摘し、同じレベルでもう一度考えてもらうフィードバックを行ってください。
+- しっかり思考して正解、または良い視点を持っている場合は「isCorrectOrPass: true」にし、次の段階（中学レベル → 高校レベル → 東大問題）へステップアップさせてください。
+- 最終的な東大問題を解き明かす解答に達した場合は「isFinalStepCleared: true」にしてください。`;
+
+        const res = await callGemini(prompt);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('action-buttons').style.display = 'flex';
+
+        if (res) {
+            if (res.isFinalStepCleared) {
+                document.getElementById('capsule-before').textContent = initialUserThought;
+                document.getElementById('capsule-after').textContent = userAnswer;
+                showScreen('screen-victory');
+            } else {
+                updateStepView(res);
+            }
+        }
+    }
+
+    async function requestLowerLevel() {
+        document.getElementById('action-buttons').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
+        const prompt = `ユーザーが現在の問題（${currentProblemState.text}）に対して「これでも難しい・わからない」と音を上げました。
+ユーザーを徹底的に肯定し、さらにレベルを極限まで下げた超直感的な問題（リンゴを数えるレベルや簡単な選択肢レベル）を作成してください。`;
+
+        const res = await callGemini(prompt);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('action-buttons').style.display = 'flex';
+
+        if (res) {
+            updateStepView(res);
+        }
+    }
+
+    function updateStepView(res) {
+        currentProblemState.level = res.nextLevelName;
+        currentProblemState.title = res.nextProblemTitle;
+        currentProblemState.text = res.nextProblemText;
+
+        document.getElementById('ai-feedback').textContent = res.feedback;
+        document.getElementById('step-level-tag').textContent = res.nextLevelName;
+        document.getElementById('step-title').textContent = res.nextProblemTitle;
+        document.getElementById('step-text').textContent = res.nextProblemText;
+        document.getElementById('step-answer').value = '';
+    }
+</script>
+
+</body>
+</html>
