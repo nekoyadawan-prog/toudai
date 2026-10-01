@@ -374,7 +374,7 @@
     let selectedSubject = '';
     let initialUserThought = '';
     let currentProblemState = {
-        level: '小学生基礎',
+        level: '超基礎レベル',
         title: '',
         text: ''
     };
@@ -417,16 +417,11 @@
             return null;
         }
 
-        // 最新の安定版APIエンドポイント（gemini-2.5-flash）に変更
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-        
-        const systemInstruction = "必ず以下のJSONフォーマットのテキストのみを出力してください。余計な文章や```jsonなどの装飾タグは一切含めないでください。\n" +
-            '{"feedback": "文字列", "isCorrectOrPass": false, "nextLevelName": "文字列", "nextProblemTitle": "文字列", "nextProblemText": "文字列", "isFinalStepCleared": false}';
+        // 確実に対応しているモデル endpoint
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
 
         const payload = {
-            contents: [{
-                parts: [{ text: promptText + "\n\n" + systemInstruction }]
-            }]
+            contents: [{ parts: [{ text: promptText }] }]
         };
 
         try {
@@ -439,43 +434,33 @@
             const data = await res.json();
 
             if (!res.ok) {
-                // モデルが見つからない場合のフォールバック（旧API環境向け）
-                if (data.error && data.error.message && data.error.message.includes("not found")) {
-                    return await callGeminiFallback(promptText, apiKey);
-                }
                 throw new Error(data.error ? data.error.message : `HTTP エラー: ${res.status}`);
             }
 
             if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
-                let rawText = data.candidates[0].content.parts[0].text.trim();
-                rawText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-                return JSON.parse(rawText);
+                const text = data.candidates[0].content.parts[0].text.trim();
+                
+                // JSONパースを試みるが、パースに失敗しても壊れずに受け取る堅牢な処理
+                try {
+                    let cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+                    return JSON.parse(cleaned);
+                } catch (jsonErr) {
+                    // もしAIが普通の文章で返してきた場合は自動でオブジェクト化
+                    return {
+                        feedback: text,
+                        nextLevelName: "ステップ1: 基礎問題",
+                        nextProblemTitle: "基礎を確認してみよう",
+                        nextProblemText: "まずはここから一緒に考えてみましょう！",
+                        isFinalStepCleared: false
+                    };
+                }
             } else {
-                throw new Error("APIからの応答が不正な形式です");
+                throw new Error("AIからのレスポンスが空でした。");
             }
         } catch (e) {
-            alert("API通信エラーが発生しました:\n" + e.message);
+            alert("APIエラー: " + e.message);
             return null;
         }
-    }
-
-    // 万が一の予備用（gemini-1.5-flash-latestモデル）
-    async function callGeminiFallback(promptText, apiKey) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
-        const systemInstruction = "必ず以下のJSONフォーマットのテキストのみを出力してください。\n" +
-            '{"feedback": "文字列", "isCorrectOrPass": false, "nextLevelName": "文字列", "nextProblemTitle": "文字列", "nextProblemText": "文字列", "isFinalStepCleared": false}';
-        
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: promptText + "\n\n" + systemInstruction }] }] })
-        });
-        const data = await res.json();
-        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
-            let rawText = data.candidates[0].content.parts[0].text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
-            return JSON.parse(rawText);
-        }
-        throw new Error("API呼び出しに失敗しました");
     }
 
     async function startAiDiagnosis() {
@@ -494,9 +479,15 @@
 元の東大問題: ${todaiProblems[selectedSubject].text}
 ユーザーの最初の本音・愚痴: "${initialUserThought}"
 
-【タスク】
-ユーザーの本音を寄り添って肯定しつつ、ユーザーの理解度・拒絶レベルを判定してください。
-そして、絶対に解ける「小学生レベル（超基礎）」の問題を一つ作成してください。`;
+ユーザーの感情を受け止めて共感した上で、超基礎的なステップ1の問題を出題してください。
+返答は以下のJSON形式で出力してください：
+{
+  "feedback": "共感メッセージやアドバイス",
+  "nextLevelName": "小学生基礎レベル",
+  "nextProblemTitle": "ステップ1の題名",
+  "nextProblemText": "ステップ1の問題文",
+  "isFinalStepCleared": false
+}`;
 
         const res = await callGemini(prompt);
         document.getElementById('loading').style.display = 'none';
@@ -517,18 +508,22 @@
         document.getElementById('action-buttons').style.display = 'none';
         document.getElementById('loading').style.display = 'block';
 
-        const prompt = `あなたは学習ゲーム「ザ東大問題」の厳格かつ優しいAI講師です。
+        const prompt = `あなたは学習ゲーム「ザ東大問題」のAI講師です。
 科目: ${selectedSubject}
-元の東大問題: ${todaiProblems[selectedSubject].text}
-現在の出題レベル: ${currentProblemState.level}
 現在の問題: ${currentProblemState.text}
-ユーザーの解答: "${userAnswer}"
+ユーザーの回答: "${userAnswer}"
 
-【重要判定ルール】
-- 適当な一文字（例：「あ」「わからん」「パス」など）や、思考の痕跡が一切ない適当な回答の場合は「isCorrectOrPass: false」にしてください。
-- 適当な回答に対しては、甘く流さずに「どこが分かっていて、何が足りないか」を厳密に指摘し、同じレベルでもう一度考えてもらうフィードバックを行ってください。
-- しっかり思考して正解、または良い視点を持っている場合は「isCorrectOrPass: true」にし、次の段階（中学レベル → 高校レベル → 東大問題）へステップアップさせてください。
-- 最終的な東大問題を解き明かす解答に達した場合は「isFinalStepCleared: true」にしてください。`;
+ユーザーの回答を分析し、次のアクションを行ってください。
+もしこれが最終クリアレベルであれば isFinalStepCleared を true にしてください。
+
+返答は以下のJSON形式で出力してください：
+{
+  "feedback": "フィードバック解説",
+  "nextLevelName": "次のレベル名",
+  "nextProblemTitle": "次の問題タイトル",
+  "nextProblemText": "次の問題文",
+  "isFinalStepCleared": false
+}`;
 
         const res = await callGemini(prompt);
         document.getElementById('loading').style.display = 'none';
@@ -549,8 +544,15 @@
         document.getElementById('action-buttons').style.display = 'none';
         document.getElementById('loading').style.display = 'block';
 
-        const prompt = `ユーザーが現在の問題（${currentProblemState.text}）に対して「これでも難しい・わからない」と音を上げました。
-ユーザーを徹底的に肯定し、さらにレベルを極限まで下げた超直感的な問題（リンゴを数えるレベルや簡単な選択肢レベル）を作成してください。`;
+        const prompt = `ユーザーが「これでも難しい」と言っています。もっとレベルを下げて、超超基礎的な問題を作成してください。
+返答は以下のJSON形式で出力してください：
+{
+  "feedback": "大丈夫！もっと簡単にするね",
+  "nextLevelName": "超入門レベル",
+  "nextProblemTitle": "超カンタンな問題",
+  "nextProblemText": "超カンタンな問題文",
+  "isFinalStepCleared": false
+}`;
 
         const res = await callGemini(prompt);
         document.getElementById('loading').style.display = 'none';
@@ -562,14 +564,14 @@
     }
 
     function updateStepView(res) {
-        currentProblemState.level = res.nextLevelName;
-        currentProblemState.title = res.nextProblemTitle;
-        currentProblemState.text = res.nextProblemText;
+        currentProblemState.level = res.nextLevelName || "ステップ問題";
+        currentProblemState.title = res.nextProblemTitle || "問題";
+        currentProblemState.text = res.nextProblemText || "問題文";
 
-        document.getElementById('ai-feedback').textContent = res.feedback;
-        document.getElementById('step-level-tag').textContent = res.nextLevelName;
-        document.getElementById('step-title').textContent = res.nextProblemTitle;
-        document.getElementById('step-text').textContent = res.nextProblemText;
+        document.getElementById('ai-feedback').textContent = res.feedback || "フィードバック";
+        document.getElementById('step-level-tag').textContent = currentProblemState.level;
+        document.getElementById('step-title').textContent = currentProblemState.title;
+        document.getElementById('step-text').textContent = currentProblemState.text;
         document.getElementById('step-answer').value = '';
     }
 </script>
