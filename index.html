@@ -256,7 +256,7 @@
     <!-- APIキー設定エリア -->
     <div class="api-key-config">
         <label for="api-key-input">🔑 Gemini API Key を入力してください:</label>
-        <input type="password" id="api-key-input" placeholder="AI Studioで取得したAPIキーペースト">
+        <input type="password" id="api-key-input" placeholder="AI Studioで取得したAPIキーをペースト">
     </div>
 
     <!-- STEP 1: 科目選択 -->
@@ -381,26 +381,16 @@
             return null;
         }
 
-        // 修正点: 安定した gemini-1.5-flash エンドポイントに変更
+        // v1beta エンドポイントを使用
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         
         const payload = {
-            contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "OBJECT",
-                    properties: {
-                        feedback: { type: "STRING" },
-                        isCorrectOrPass: { type: "BOOLEAN" },
-                        nextLevelName: { type: "STRING" },
-                        nextProblemTitle: { type: "STRING" },
-                        nextProblemText: { type: "STRING" },
-                        isFinalStepCleared: { type: "BOOLEAN" }
-                    },
-                    required: ["feedback", "isCorrectOrPass", "nextLevelName", "nextProblemTitle", "nextProblemText", "isFinalStepCleared"]
-                }
-            }
+            contents: [{
+                parts: [{
+                    text: promptText + "\n\n【重要出力指示】必ず以下のJSONフォーマットの文字のみで出力してください。説明文や```json などのコードブロック装飾は一切含めないでください。\n" +
+                    '{"feedback": "文字列", "isCorrectOrPass": trueまたはfalse, "nextLevelName": "文字列", "nextProblemTitle": "文字列", "nextProblemText": "文字列", "isFinalStepCleared": trueまたはfalse}'
+                }]
+            }]
         };
 
         try {
@@ -409,152 +399,8 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+
             const data = await res.json();
-            if (data.candidates && data.candidates[0].content.parts[0].text) {
-                return JSON.parse(data.candidates[0].content.parts[0].text);
-            } else {
-                throw new Error(data.error ? data.error.message : "APIレスポンスエラー");
-            }
-        } catch (e) {
-            alert("API通信に失敗しました。APIキーを確認してください。\n" + e.message);
-            return null;
-        }
-    }
 
-    // 最初の愚痴診断
-    async function startAiDiagnosis() {
-        initialUserThought = document.getElementById('initial-thought').value.trim();
-        if (!initialUserThought) {
-            alert("愚痴や言い訳、率直な感想を一言入力してください！");
-            return;
-        }
-
-        document.getElementById('action-buttons').style.display = 'none';
-        document.getElementById('loading').style.display = 'block';
-        showScreen('screen-step');
-
-        const prompt = `
-あなたは学習ゲーム「ザ東大問題」のAI伴走者です。
-科目: ${selectedSubject}
-元の東大問題: ${todaiProblems[selectedSubject].text}
-ユーザーの最初の本音・愚痴: "${initialUserThought}"
-
-【タスク】
-ユーザーの本音を寄り添って肯定しつつ、ユーザーの理解度・拒絶レベルを判定してください。
-そして、絶対に解ける「小学生レベル（超基礎）」の問題を一つ作成してください。
-
-回答は以下のJSONフォーマットで返してください：
-{
-  "feedback": "ユーザーの愚痴への共感と、今のレベル設定の理由（親しみやすいトーン）",
-  "isCorrectOrPass": false,
-  "nextLevelName": "小学生レベル",
-  "nextProblemTitle": "超入門問題のタイトル",
-  "nextProblemText": "日常に例えた超簡単な問題文",
-  "isFinalStepCleared": false
-}
-        `;
-
-        const res = await callGemini(prompt);
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('action-buttons').style.display = 'flex';
-
-        if (res) {
-            updateStepView(res);
-        }
-    }
-
-    // ステップ解答の評価
-    async function submitStepAnswer() {
-        const userAnswer = document.getElementById('step-answer').value.trim();
-        if (!userAnswer) {
-            alert("回答または考えたことを入力してください！");
-            return;
-        }
-
-        document.getElementById('action-buttons').style.display = 'none';
-        document.getElementById('loading').style.display = 'block';
-
-        const prompt = `
-あなたは学習ゲーム「ザ東大問題」の厳格かつ優しいAI講師です。
-科目: ${selectedSubject}
-元の東大問題: ${todaiProblems[selectedSubject].text}
-現在の出題レベル: ${currentProblemState.level}
-現在の問題: ${currentProblemState.text}
-ユーザーの解答: "${userAnswer}"
-
-【重要判定ルール】
-- 適当な一文字（例：「あ」「わからん」「パス」など）や、思考の痕跡が一切ない適当な回答の場合は「isCorrectOrPass: false」にしてください。
-- 適当な回答に対しては、甘く流さずに「どこが分かっていて、何が足りないか」を厳密に指摘し、同じレベルでもう一度考えてもらうフィードバックを行ってください。
-- しっかり思考して正解、または良い視点を持っている場合は「isCorrectOrPass: true」にし、次の段階（中学レベル → 高校レベル → 東大問題）へステップアップさせてください。
-- 最終的な東大問題を解き明かす解答に達した場合は「isFinalStepCleared: true」にしてください。
-
-JSON出力フォーマット：
-{
-  "feedback": "ユーザーの回答に対する厳密な理解度分析とフィードバック",
-  "isCorrectOrPass": true または false,
-  "nextLevelName": "次（または現在）のレベル名",
-  "nextProblemTitle": "問題タイトル",
-  "nextProblemText": "問題文（不正解の場合は解き直しのヒント付き問題、正解の場合は1段階上のレベルの問題）",
-  "isFinalStepCleared": true または false
-}
-        `;
-
-        const res = await callGemini(prompt);
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('action-buttons').style.display = 'flex';
-
-        if (res) {
-            if (res.isFinalStepCleared) {
-                document.getElementById('capsule-before').textContent = initialUserThought;
-                document.getElementById('capsule-after').textContent = userAnswer;
-                showScreen('screen-victory');
-            } else {
-                updateStepView(res);
-            }
-        }
-    }
-
-    // もっとレベルを下げるリクエスト
-    async function requestLowerLevel() {
-        document.getElementById('action-buttons').style.display = 'none';
-        document.getElementById('loading').style.display = 'block';
-
-        const prompt = `
-ユーザーが現在の問題（${currentProblemState.text}）に対して「これでも難しい・わからない」と音を上げました。
-ユーザーを徹底的に肯定し、さらにレベルを極限まで下げた超直感的な問題（リンゴを数えるレベルや簡単な選択肢レベル）を作成してください。
-
-JSON出力フォーマット：
-{
-  "feedback": "「教えてくれてありがとう！」という肯定と、さらにレベルを下げる案内",
-  "isCorrectOrPass": false,
-  "nextLevelName": "超入門（直感レベル）",
-  "nextProblemTitle": "さらに簡単な問題",
-  "nextProblemText": "超簡単な問題文",
-  "isFinalStepCleared": false
-}
-        `;
-
-        const res = await callGemini(prompt);
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('action-buttons').style.display = 'flex';
-
-        if (res) {
-            updateStepView(res);
-        }
-    }
-
-    function updateStepView(res) {
-        currentProblemState.level = res.nextLevelName;
-        currentProblemState.title = res.nextProblemTitle;
-        currentProblemState.text = res.nextProblemText;
-
-        document.getElementById('ai-feedback').textContent = res.feedback;
-        document.getElementById('step-level-tag').textContent = res.nextLevelName;
-        document.getElementById('step-title').textContent = res.nextProblemTitle;
-        document.getElementById('step-text').textContent = res.nextProblemText;
-        document.getElementById('step-answer').value = '';
-    }
-</script>
-
-</body>
-</html>
+            if (!res.ok) {
+                throw new Error(data.error ? data.error.message : `HTTP
