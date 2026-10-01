@@ -14,7 +14,6 @@
             --text-color: #2b2d42;
             --text-light: #6c757d;
             --success: #2a9d8f;
-            --warning: #e9c46a;
         }
 
         * {
@@ -361,7 +360,6 @@
         title: '',
         text: ''
     };
-    let stepHistory = [];
 
     function showScreen(id) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -383,7 +381,8 @@
             return null;
         }
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        // 修正点: 安定した gemini-1.5-flash エンドポイントに変更
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         
         const payload = {
             contents: [{ parts: [{ text: promptText }] }],
@@ -414,7 +413,7 @@
             if (data.candidates && data.candidates[0].content.parts[0].text) {
                 return JSON.parse(data.candidates[0].content.parts[0].text);
             } else {
-                throw new Error("APIレスポンスエラー");
+                throw new Error(data.error ? data.error.message : "APIレスポンスエラー");
             }
         } catch (e) {
             alert("API通信に失敗しました。APIキーを確認してください。\n" + e.message);
