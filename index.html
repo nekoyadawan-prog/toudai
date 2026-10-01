@@ -56,7 +56,6 @@
             color: var(--primary);
         }
 
-        /* APIキー設定エリア */
         .api-key-config {
             background: #fff3bf;
             border: 1px solid #ffe066;
@@ -274,7 +273,6 @@
         <p style="font-size:0.85rem; color:#666;">リアルタイムAI診断で思考プロセスを厳密分析</p>
     </header>
 
-    <!-- APIキー設定エリア（保存ボタン付き） -->
     <div class="api-key-config">
         <label for="api-key-input">🔑 Gemini API Key 設定:</label>
         <div class="api-key-flex">
@@ -283,7 +281,6 @@
         </div>
     </div>
 
-    <!-- STEP 1: 科目選択 -->
     <div id="screen-subject" class="screen active">
         <h2 style="text-align: center; margin-bottom: 10px;">挑戦する科目を選んでください</h2>
         <div class="subject-grid">
@@ -293,7 +290,6 @@
         </div>
     </div>
 
-    <!-- STEP 2: 東大問題（絶望）＆愚痴入力 -->
     <div id="screen-todai" class="screen">
         <div class="problem-card">
             <span class="problem-level">東京大学 入試問題</span>
@@ -309,7 +305,6 @@
         <button class="btn btn-primary" style="width: 100%;" onclick="startAiDiagnosis()">AIに思考を分析してもらう</button>
     </div>
 
-    <!-- STEP 3: AIとのインタラクティブ学習ステップ -->
     <div id="screen-step" class="screen">
         <div class="ai-response">
             <div class="ai-header">
@@ -338,7 +333,6 @@
         </div>
     </div>
 
-    <!-- STEP 4: 勝利画面 -->
     <div id="screen-victory" class="screen">
         <div class="victory-banner">
             <h2>🎉 祝！東大問題を完全攻略！</h2>
@@ -385,7 +379,6 @@
         text: ''
     };
 
-    // 画面ロード時に保存済みキーがあれば読み込み
     window.addEventListener('DOMContentLoaded', () => {
         const savedKey = localStorage.getItem('gemini_api_key');
         if (savedKey) {
@@ -393,7 +386,6 @@
         }
     });
 
-    // APIキー保存関数
     function saveApiKey() {
         const key = document.getElementById('api-key-input').value.trim();
         if (!key) {
@@ -418,7 +410,6 @@
     }
 
     async function callGemini(promptText) {
-        // 保存されたキー、または入力欄のキーを取得
         let apiKey = localStorage.getItem('gemini_api_key') || document.getElementById('api-key-input').value.trim();
         
         if (!apiKey) {
@@ -426,7 +417,8 @@
             return null;
         }
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // 最新の安定版APIエンドポイント（gemini-2.5-flash）に変更
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
         const systemInstruction = "必ず以下のJSONフォーマットのテキストのみを出力してください。余計な文章や```jsonなどの装飾タグは一切含めないでください。\n" +
             '{"feedback": "文字列", "isCorrectOrPass": false, "nextLevelName": "文字列", "nextProblemTitle": "文字列", "nextProblemText": "文字列", "isFinalStepCleared": false}';
@@ -447,6 +439,10 @@
             const data = await res.json();
 
             if (!res.ok) {
+                // モデルが見つからない場合のフォールバック（旧API環境向け）
+                if (data.error && data.error.message && data.error.message.includes("not found")) {
+                    return await callGeminiFallback(promptText, apiKey);
+                }
                 throw new Error(data.error ? data.error.message : `HTTP エラー: ${res.status}`);
             }
 
@@ -461,6 +457,25 @@
             alert("API通信エラーが発生しました:\n" + e.message);
             return null;
         }
+    }
+
+    // 万が一の予備用（gemini-1.5-flash-latestモデル）
+    async function callGeminiFallback(promptText, apiKey) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+        const systemInstruction = "必ず以下のJSONフォーマットのテキストのみを出力してください。\n" +
+            '{"feedback": "文字列", "isCorrectOrPass": false, "nextLevelName": "文字列", "nextProblemTitle": "文字列", "nextProblemText": "文字列", "isFinalStepCleared": false}';
+        
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: promptText + "\n\n" + systemInstruction }] }] })
+        });
+        const data = await res.json();
+        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
+            let rawText = data.candidates[0].content.parts[0].text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+            return JSON.parse(rawText);
+        }
+        throw new Error("API呼び出しに失敗しました");
     }
 
     async function startAiDiagnosis() {
